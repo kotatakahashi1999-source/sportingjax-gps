@@ -674,41 +674,47 @@ async function syncSessionCalendar(){
   const avg=session.teamAvg;
   const flagged=session.players.filter(p=>p.load==='H').map(p=>p.name).join(', ')||'None';
   const high=session.players.filter(p=>p.load==='H').map(p=>p.name).join(', ')||'None';
-  const aboveLines=METRICS.map(m=>{const ns=session.aboveAvg[m.key]||[];return ns.length?m.label+': '+ns.join(', '):null;}).filter(Boolean).join('\n');
 
-  const content='## Team averages — '+session.date+'\n\n'+
-    METRICS.map(m=>`| ${m.label} (${m.unit||'#'}) | ${avg[m.key]!==null?avg[m.key]:'—'} |`).join('\n')+'\n\n---\n\n'+
-    '## High Load Players\n\n'+high+'\n\n---\n\n'+
-    '## Above Team Average\n\n'+aboveLines+'\n\n---\n\n## Session notes\n\n> Add coaching observations here.';
-
-  const props={
-    "Session":{title:[{text:{content:session.date}}]},
-    "Flagged Players":{rich_text:[{text:{content:flagged}}]},
-    "High Load Players":{rich_text:[{text:{content:high}}]},
-    "Players":{number:session.players.length},
+  // Build properties with correct Notion column names
+  const cleanProps={
+    'Session':{title:[{text:{content:session.date}}]},
+    'Players':{number:session.players.length},
+    'Flagged Players':{rich_text:[{text:{content:flagged.slice(0,1999)}}]},
+    'High Load Players':{rich_text:[{text:{content:high.slice(0,1999)}}]},
+    'Notes':{rich_text:[{text:{content:''}}]},
   };
-  if(session.date) props["Date"]={date:{start:session.date}};
-  METRICS.forEach(m=>{if(avg[m.key]!==null)props['Avg '+m.label+(m.unit?' ('+m.unit+')':'')]={number:avg[m.key]};});
-  // Map metric keys to Notion column names
-  const notionCols={'Avg Duration (mins)':'Avg Duration (mins)','Avg Distance (m)':'Avg Distance (m)','Avg m/min (m/min)':'Avg Metres per Minute','Avg HIR (m)':'Avg HIR (m)','Avg Sprint (m)':'Avg Sprint (m)','Avg Top Speed (m/s)':'Avg Top Speed (m/s)','Avg Accels ()':'Avg Accelerations','Avg Decels ()':'Avg Decelerations','Avg % Max Spd (%)':'Avg % Max Speed','Avg HMLD (m)':'Avg HMLD (m)'};
-  const cleanProps={'Session':props['Session']};
-  if(props['Date'])cleanProps['Date']=props['Date'];
-  cleanProps['Players']=props['Players'];
-  cleanProps['Flagged Players']=props['Flagged Players'];
-  cleanProps['High Load Players']=props['High Load Players'];
-  if(avg.duration!==null)cleanProps['Avg Duration (mins)']={number:avg.duration};
-  if(avg.distance!==null)cleanProps['Avg Distance (m)']={number:avg.distance};
-  if(avg.mpm!==null)cleanProps['Avg Metres per Minute']={number:avg.mpm};
-  if(avg.hir!==null)cleanProps['Avg HIR (m)']={number:avg.hir};
-  if(avg.sprint!==null)cleanProps['Avg Sprint (m)']={number:avg.sprint};
-  if(avg.topspeed!==null)cleanProps['Avg Top Speed (m/s)']={number:avg.topspeed};
-  if(avg.accel!==null)cleanProps['Avg Accelerations']={number:avg.accel};
-  if(avg.decel!==null)cleanProps['Avg Decelerations']={number:avg.decel};
-  if(avg.pctmax!==null)cleanProps['Avg % Max Speed']={number:avg.pctmax};
-  if(avg.hmld!==null)cleanProps['Avg HMLD (m)']={number:avg.hmld};
-  cleanProps['Notes']={rich_text:[{text:{content:''}}]};
+  if(session.date) cleanProps['Date']={date:{start:session.date}};
+  if(avg.duration!==null) cleanProps['Avg Duration (mins)']={number:avg.duration};
+  if(avg.distance!==null) cleanProps['Avg Distance (m)']={number:avg.distance};
+  if(avg.mpm!==null)      cleanProps['Avg Metres per Minute']={number:avg.mpm};
+  if(avg.hir!==null)      cleanProps['Avg HIR (m)']={number:avg.hir};
+  if(avg.sprint!==null)   cleanProps['Avg Sprint (m)']={number:avg.sprint};
+  if(avg.topspeed!==null) cleanProps['Avg Top Speed (m/s)']={number:avg.topspeed};
+  if(avg.accel!==null)    cleanProps['Avg Accelerations']={number:avg.accel};
+  if(avg.decel!==null)    cleanProps['Avg Decelerations']={number:avg.decel};
+  if(avg.pctmax!==null)   cleanProps['Avg % Max Speed']={number:avg.pctmax};
+  if(avg.hmld!==null)     cleanProps['Avg HMLD (m)']={number:avg.hmld};
 
-  await notionReq('pages','POST',{parent:{database_id:CAL_DB},properties:cleanProps,children:[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:content}}]}}]});
+  // Build page body as multiple blocks — each block max 1900 chars (safe under Notion's 2000 limit)
+  function txtBlock(s){ return {object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:s.slice(0,1900)}}]}}; }
+
+  const avgTable='Team averages — '+session.date+'\n'+
+    METRICS.map(m=>'  '+m.label+': '+(avg[m.key]!==null?avg[m.key]:'—')).join('\n');
+
+  // One block per metric for above-average (prevents any single block exceeding 1900 chars)
+  const aboveBlocks=METRICS.map(m=>{
+    const ns=session.aboveAvg[m.key]||[];
+    return ns.length?txtBlock('Above avg '+m.label+': '+ns.join(', ')):null;
+  }).filter(Boolean);
+
+  const children=[
+    txtBlock(avgTable),
+    txtBlock('High Load Players: '+high),
+    ...(aboveBlocks.length?aboveBlocks:[txtBlock('Above avg: None')]),
+    txtBlock('Session notes — add coaching observations here.'),
+  ];
+
+  await notionReq('pages','POST',{parent:{database_id:CAL_DB},properties:cleanProps,children});
   log('Session calendar ✓','ok');
 }
 
