@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sporting JAX — GPS Performance</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --sky:#4BAADC; --sky2:#2D8BBF; --sky-pale:#EAF5FB; --sky-mist:#F4FAFD;
+  --yellow:#F5C518; --orange:#F07830;
+  --navy:#0B2240; --navy2:#1A3A5C;
+  --bg:#F7FAFC; --surface:#FFFFFF;
+  --border:#E2EDF5; --border2:#C8DFF0;
+  --text:#0B2240; --muted:#6B87A4; --faint:#A8BFD0;
+  --high:#E53E3E; --high-bg:#FFF5F5; --high-border:#FED7D7;
+  --mod:#D69E2E; --mod-bg:#FFFFF0; --mod-border:#FAF089;
+  --low:#38A169; --low-bg:#F0FFF4; --low-border:#C6F6D5;
+  --flag:#E53E3E;
+  --radius:8px; --radius-lg:12px;
+  --shadow:0 1px 3px rgba(11,34,64,.07),0 4px 12px rgba(11,34,64,.05);
+  --shadow-md:0 2px 8px rgba(11,34,64,.10),0 8px 24px rgba(11,34,64,.07);
+  --font:"DM Sans",sans-serif; --mono:"DM Mono",monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── UPLOAD SCREEN ── */
+#upload-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;background:linear-gradient(160deg,#F0F8FD 0%,#fff 55%,#FEF9E8 100%)}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:40px}
+.logo-mark{width:40px;height:40px;border-radius:50%;background:var(--sky);position:relative;overflow:hidden;flex-shrink:0}
+.logo-mark::before{content:'';position:absolute;top:38%;bottom:30%;left:0;right:0;background:var(--yellow)}
+.logo-text{font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.upload-h1{font-size:38px;font-weight:700;letter-spacing:-1px;text-align:center;color:var(--navy);line-height:1.15;margin-bottom:12px;max-width:480px}
+.upload-h1 span{color:var(--sky)}
+.upload-sub{color:var(--muted);font-size:15px;text-align:center;max-width:400px;line-height:1.7;margin-bottom:36px}
+.drop-zone{width:100%;max-width:480px;border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:44px 24px;text-align:center;cursor:pointer;transition:.2s;background:var(--surface);box-shadow:var(--shadow);margin-bottom:16px}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--sky);background:var(--sky-mist);box-shadow:0 0 0 4px rgba(75,170,220,.12)}
+.drop-icon{font-size:36px;margin-bottom:12px;opacity:.5}
+.drop-label{font-size:17px;font-weight:600;color:var(--navy);margin-bottom:4px}
+.drop-hint{font-size:13px;color:var(--muted);margin-bottom:18px}
+.drop-btn{background:var(--sky);color:#fff;border:none;padding:10px 28px;border-radius:100px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:.18s}
+.drop-btn:hover{background:var(--sky2);transform:translateY(-1px)}
+#file-input{display:none}
+.key-row{width:100%;max-width:480px;display:flex;gap:8px;margin-top:8px}
+.key-row input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:9px 14px;border-radius:100px;font-family:var(--mono);font-size:12px;outline:none;transition:.18s}
+.key-row input::placeholder{color:var(--faint)}
+.key-row input:focus{border-color:var(--sky)}
+.key-row button{background:var(--navy);border:none;color:#fff;padding:9px 18px;border-radius:100px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:.18s;white-space:nowrap}
+.key-row button:hover{background:var(--navy2)}
+.key-saved{font-size:11px;color:var(--low);margin-top:6px;font-family:var(--mono);text-align:center}
+.error-msg{color:var(--high);font-size:13px;margin-top:12px;font-family:var(--mono);text-align:center}
+.fmt-tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:12px;max-width:480px}
+.fmt-tag{background:var(--sky-pale);border:1px solid var(--border2);color:var(--sky2);padding:3px 10px;border-radius:100px;font-size:11px;font-weight:600}
+
+/* ── DASHBOARD ── */
+#dashboard{display:none}
+
+/* TOPBAR */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 0 var(--border),0 2px 8px rgba(11,34,64,.04)}
+.topbar-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;color:var(--navy)}
+.topbar-brand .mark{width:28px;height:28px;border-radius:50%;background:var(--sky);position:relative;overflow:hidden;flex-shrink:0;box-shadow:inset 0 -3px 0 var(--yellow)}
+.session-pill{background:var(--sky-pale);border:1px solid var(--border2);color:var(--sky2);padding:4px 12px;border-radius:100px;font-size:12px;font-weight:500;font-family:var(--mono)}
+.topbar-nav{display:flex;gap:2px}
+.nav-btn{background:transparent;border:1px solid transparent;color:var(--muted);padding:6px 14px;border-radius:100px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:500;transition:.18s;white-space:nowrap}
+.nav-btn:hover{border-color:var(--border2);color:var(--text)}
+.nav-btn.active{background:var(--sky);color:#fff;border-color:var(--sky)}
+.sync-btn{background:var(--navy);color:#fff;border:none;padding:8px 18px;border-radius:100px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.2s;white-space:nowrap}
+.sync-btn:hover{background:var(--sky2)}
+.sync-btn.syncing{background:var(--orange);animation:pulse 1.2s ease-in-out infinite}
+.sync-btn.done{background:var(--low);cursor:default}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.75}}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.8)}
+.sync-btn.syncing .sync-dot{animation:blink .8s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.topbar-right{display:flex;align-items:center;gap:8px}
+
+/* TABS */
+.tab{display:none}.tab.active{display:block}
+.container{max-width:1380px;margin:0 auto;padding:20px 24px}
+
+/* STAT CARDS */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:20px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:.2s}
+.card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--sky),var(--sky2))}
+.card-label{font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.card-value{font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.5px;line-height:1;margin-bottom:2px}
+.card-unit{font-size:11px;color:var(--faint)}
+
+/* SECTION HEADS */
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin:24px 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.sec-title{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.sec-title::before{content:'';width:3px;height:14px;background:var(--sky);border-radius:2px;flex-shrink:0}
+.sec-note{font-size:11px;color:var(--faint)}
+
+/* TABLE */
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;cursor:pointer}
+thead th:hover{color:var(--sky)}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;font-family:var(--mono);font-size:12px}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--sky-mist)}
+.name-cell{font-family:var(--font)!important;font-weight:600;font-size:13px!important;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--navy)!important}
+.name-cell:hover{color:var(--sky)!important}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--sky-pale);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--sky2);flex-shrink:0;font-family:var(--font)}
+.badge{display:inline-block;padding:2px 9px;border-radius:100px;font-family:var(--font);font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.badge-H{background:var(--high-bg);color:var(--high);border:1px solid var(--high-border)}
+.badge-M{background:var(--mod-bg);color:var(--mod);border:1px solid var(--mod-border)}
+.badge-L{background:var(--low-bg);color:var(--low);border:1px solid var(--low-border)}
+.flag-badge{background:#FFF5F5;color:var(--flag);border:1px solid var(--high-border);font-size:11px;font-family:var(--font);padding:2px 8px;border-radius:100px;font-weight:600}
+
+/* CHARTS */
+.chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+.chart-box canvas{max-height:240px}
+.chart-title{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.chart-title::before{content:'';width:3px;height:14px;background:var(--sky);border-radius:2px}
+.charts-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+
+/* PLAYER DETAIL */
+.player-hdr{display:flex;align-items:center;gap:14px;padding:18px 20px;background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);border-top:3px solid var(--sky);margin-bottom:20px;box-shadow:var(--shadow);animation:fadeUp .22s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.avatar-lg{width:48px;height:48px;border-radius:50%;background:var(--sky-pale);border:2px solid var(--sky);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:var(--sky2);flex-shrink:0}
+.player-name{font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
+.player-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.back-btn{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:100px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:500;transition:.18s}
+.back-btn:hover{border-color:var(--sky);color:var(--sky)}
+.avg-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.avg-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;box-shadow:var(--shadow)}
+.avg-card-label{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+.avg-card-value{font-size:22px;font-weight:700;color:var(--sky);letter-spacing:-.5px;font-family:var(--mono)}
+
+/* FLAGGED SECTION */
+.flag-section{background:#FFF5F5;border:1px solid var(--high-border);border-left:4px solid var(--high);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:20px}
+.flag-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--high);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.flag-list{display:flex;gap:8px;flex-wrap:wrap}
+.flag-chip{background:#fff;border:1px solid var(--high-border);color:var(--high);padding:5px 12px;border-radius:100px;font-size:12px;font-weight:600;cursor:pointer;transition:.18s}
+.flag-chip:hover{background:var(--high-bg)}
+
+/* SYNC LOG */
+#sync-panel{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--sky);border-radius:var(--radius-lg);padding:14px 18px;margin-top:14px}
+.sync-log-title{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+#sync-log{font-family:var(--mono);font-size:11px;max-height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.log-ok{color:var(--low)}.log-err{color:var(--high)}.log-pending{color:var(--sky)}.log-info{color:var(--muted)}
+
+/* MISC */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--sky)}
+@media(max-width:768px){.topbar{padding:0 14px}.container{padding:14px}.cards-grid{grid-template-columns:repeat(2,1fr)}.charts-2col{grid-template-columns:1fr}.topbar-nav{display:none}}
+</style>
+</head>
+<body>
+
+<!-- UPLOAD SCREEN -->
+<div id="upload-screen">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div class="logo-text">Sporting Club Jacksonville · GPS</div>
+  </div>
+  <div class="upload-h1">Import session.<br><span>Sync to Notion instantly.</span></div>
+  <div class="upload-sub">Upload any PlayerData CSV export — both 12-column and 35-column formats are auto-detected.</div>
+  <div class="drop-zone" id="dropzone">
+    <div class="drop-icon">📂</div>
+    <div class="drop-label">Drag & drop your CSV here</div>
+    <div class="drop-hint">PlayerData daily session export</div>
+    <button class="drop-btn" onclick="document.getElementById('file-input').click()">Choose file</button>
+    <input type="file" id="file-input" accept=".csv">
+  </div>
+  <div class="key-row">
+    <input type="password" id="notion-key" placeholder="Notion integration key (ntn_...)" autocomplete="off">
+    <button onclick="saveKey()">Save key</button>
+  </div>
+  <div class="key-saved" id="key-status"></div>
+  <div class="error-msg" id="error-msg"></div>
+  <div class="fmt-tags">
+    <span class="fmt-tag">Duration</span><span class="fmt-tag">Distance</span>
+    <span class="fmt-tag">m/min</span><span class="fmt-tag">HIR</span>
+    <span class="fmt-tag">Sprint</span><span class="fmt-tag">Top Speed</span>
+    <span class="fmt-tag">Accels</span><span class="fmt-tag">Decels</span>
+    <span class="fmt-tag">% Max Speed</span><span class="fmt-tag">HMLD</span>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="mark"></div>
+      Sporting JAX GPS
+    </div>
+    <div class="topbar-nav">
+      <button class="nav-btn active" onclick="showTab('team',this)">Team</button>
+      <button class="nav-btn" onclick="showTab('players',this)">Players</button>
+      <button class="nav-btn" onclick="showTab('trends',this)">Trends</button>
+    </div>
+    <div class="topbar-right">
+      <div class="session-pill" id="session-label">—</div>
+      <button class="sync-btn" id="sync-btn" onclick="startSync()">
+        <div class="sync-dot"></div>Sync to Notion
+      </button>
+    </div>
+  </div>
+
+  <!-- TEAM TAB -->
+  <div class="tab active" id="tab-team">
+    <div class="container">
+      <div id="flag-section-wrap"></div>
+      <div class="sec-head"><div class="sec-title">Team Averages — Session</div><div class="sec-note" id="player-count"></div></div>
+      <div class="cards-grid" id="team-cards"></div>
+      <div class="charts-2col">
+        <div class="chart-box"><div class="chart-title">Distance (m)</div><canvas id="chart-dist"></canvas></div>
+        <div class="chart-box"><div class="chart-title">HMLD (m)</div><canvas id="chart-hmld"></canvas></div>
+      </div>
+      <div class="sec-head"><div class="sec-title">Above Team Average — All Metrics</div></div>
+      <div class="tbl-wrap"><table id="above-avg-table"></table></div>
+      <div id="sync-panel" style="display:none">
+        <div class="sync-log-title">Notion Sync Log</div>
+        <div id="sync-log"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAYERS TAB -->
+  <div class="tab" id="tab-players">
+    <div class="container">
+      <div id="player-detail" style="display:none"></div>
+      <div id="player-list-view">
+        <div class="sec-head"><div class="sec-title">All Players — Latest Session</div><div class="sec-note" id="sort-note">Click column to sort</div></div>
+        <div class="tbl-wrap"><table id="player-table"></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRENDS TAB -->
+  <div class="tab" id="tab-trends">
+    <div class="container">
+      <div class="sec-head"><div class="sec-title">Season Trends</div></div>
+      <div class="avg-cards" id="season-avg-cards"></div>
+      <div class="charts-2col">
+        <div class="chart-box"><div class="chart-title">HIR (m) per player</div><canvas id="chart-hir"></canvas></div>
+        <div class="chart-box"><div class="chart-title">Top Speed (m/s) per player</div><canvas id="chart-spd"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const SQUAD_DB  = "738a6ae2-6e59-499b-b58f-50251686bf81";
+const CAL_DB    = "809d66ae-dc6e-4bec-862c-a3bc667ab63b";
+const LOG_DB    = "7064ce6c-b222-4a62-a164-b502550ffd85";
+const PROXY     = "https://corsproxy.io/?";
+const NV        = "2022-06-28";
+
+// ─── NAME NORMALISATION ────────────────────────────────────────────────────
+const NAME_MAP = {
+  "adam michael luckhurst":"Adam Luckhurst","adam luckhurst":"Adam Luckhurst",
+  "adonijah reid":"Adonijah Reid","ahmad al qaq":"Ahmad Al-Qaq","ahmad al-qaq":"Ahmad Al-Qaq",
+  "antonio gomez":"Antonio Gomez","brem soumaoro":"Brem Soumaoro",
+  "christian olivares":"Christian Olivares","dida armstrong":"Dida Armstrong",
+  "emil jaaskelainen":"Emil Jääskeläinen","emil jääskeläinen":"Emil Jääskeläinen",
+  "esteban casas":"Esteban Casas","ethan dudley":"Ethan Dudley","ezekiel soto":"Ezekiel Soto",
+  "harvey neville":"Harvey Neville","jack proctor":"Jack Proctor","jacob evans":"Jacob Evans",
+  "jake mcguire":"Jake McGuire","jordan":"Jordan Rossiter","jordan rossiter":"Jordan Rossiter",
+  "kieran sadlier":"Kieran Sadlier","luc granitur":"Luc Granitur",
+  "mohamed traore":"Mohamed Traore","piero elias":"Piero Elias",
+  "rafferty pedder":"Rafferty Pedder","ryan edwards":"Ryan Edwards",
+  "thomas roberts":"Thomas Roberts","tyshawn rose":"Tyshawn Rose",
+  "wahab ackwei":"Wahab Ackwei","wan kuzain":"Wan Kuzain",
+};
+function normName(raw){return NAME_MAP[raw.trim().toLowerCase()]||raw.trim().replace(/\b\w/g,c=>c.toUpperCase());}
+
+// ─── METRICS ───────────────────────────────────────────────────────────────
+const METRICS = [
+  {key:'duration', label:'Duration',   unit:'mins', col:'Duration (mins)'},
+  {key:'distance', label:'Distance',   unit:'m',    col:'Distance (m)'},
+  {key:'mpm',      label:'m/min',      unit:'m/min',col:'Metres per Minute (m)'},
+  {key:'hir',      label:'HIR',        unit:'m',    col:'High Intensity Running (m)'},
+  {key:'sprint',   label:'Sprint',     unit:'m',    col:'Sprint Distance (m)'},
+  {key:'topspeed', label:'Top Speed',  unit:'m/s',  col:'Top Speed (m/s)'},
+  {key:'accel',    label:'Accels',     unit:'',     col:'Accelerations'},
+  {key:'decel',    label:'Decels',     unit:'',     col:'Decelerations'},
+  {key:'pctmax',   label:'% Max Spd', unit:'%',    col:'Percentage of Max Speed'},
+  {key:'hmld',     label:'HMLD',       unit:'m',    col:'High Metabolic Load Distance (m)'},
+];
+// Flexible aliases for column detection
+const COL_ALIASES = {
+  name:     ['name ','name','athlete name','player name','player'],
+  date:     ['date ','date','start date'],
+  segment:  ['segment name','segment'],
+  duration: ['duration (mins)','duration'],
+  distance: ['distance (m)','distance'],
+  mpm:      ['metres per minute (m)','metres per minute','m/min','mpm'],
+  hir:      ['high intensity running (m)','high intensity running','hir'],
+  sprint:   ['sprint distance (m)','sprint distance','sprint'],
+  topspeed: ['top speed (m/s)','top speed (km/h)','top speed'],
+  accel:    ['accelerations','accels','acceleration'],
+  decel:    ['decelerations','decels','deceleration'],
+  pctmax:   ['percentage of max speed','% max speed','pct max speed','percent max'],
+  hmld:     ['high metabolic load distance (m)','high metabolic load distance','hmld'],
+};
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let session = null;
+let charts = {};
+let sortKey = 'hmld', sortDir = -1;
+
+// ─── KEY ───────────────────────────────────────────────────────────────────
+function saveKey(){
+  const k = document.getElementById('notion-key').value.trim();
+  if(!k){showErr('Please enter your Notion integration key');return;}
+  localStorage.setItem('notion_key',k);
+  document.getElementById('key-status').textContent='✓ Key saved';
+}
+function getKey(){return localStorage.getItem('notion_key')||'';}
+window.addEventListener('DOMContentLoaded',()=>{
+  if(getKey()) document.getElementById('key-status').textContent='✓ Notion key saved';
+});
+
+function showErr(msg){document.getElementById('error-msg').textContent=msg;}
+function clearErr(){document.getElementById('error-msg').textContent='';}
+
+// ─── DRAG & DROP ───────────────────────────────────────────────────────────
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)readFile(f);});
+document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0]);});
+
+// ─── CSV PARSING ───────────────────────────────────────────────────────────
+function parseCSV(text){
+  const lines = text.trim().split(/\r?\n/);
+  const raw_headers = lines[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim());
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const vals = splitCSVLine(lines[i]);
+    const obj = {};
+    raw_headers.forEach((h,idx)=>obj[h]=(vals[idx]||'').replace(/^"|"$/g,'').trim());
+    rows.push(obj);
+  }
+  return {headers:raw_headers, rows};
+}
+function splitCSVLine(line){
+  const res=[];let cur='',inQ=false;
+  for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){res.push(cur);cur='';}else cur+=ch;}
+  res.push(cur);return res;
+}
+function detectCol(headers, key){
+  const aliases = COL_ALIASES[key]||[];
+  const low = headers.map(h=>h.toLowerCase().trim());
+  for(const alias of aliases){const i=low.indexOf(alias);if(i>=0)return headers[i];}
+  return null;
+}
+function parseNum(v){
+  if(!v||String(v).trim()===''||String(v).trim()==='-') return null;
+  const n=parseFloat(String(v).replace(/,/g,''));
+  return isNaN(n)?null:n;
+}
+function parseDate(d){
+  const m1=d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m1)return `${m1[3]}-${m1[1].padStart(2,'0')}-${m1[2].padStart(2,'0')}`;
+  const m2=d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m2)return d;
+  return null;
+}
+
+function readFile(file){
+  clearErr();
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const {headers, rows} = parseCSV(e.target.result);
+      if(!rows.length){showErr('CSV appears empty');return;}
+
+      const nameCol    = detectCol(headers,'name');
+      const dateCol    = detectCol(headers,'date');
+      if(!nameCol){showErr('Could not find player name column');return;}
+      if(!dateCol){showErr('Could not find date column');return;}
+
+      const colMap = {};
+      for(const m of METRICS) colMap[m.key] = detectCol(headers, m.key);
+
+      // Detect segment column (35-col format has 'Segment Name')
+      const segCol = detectCol(headers,'segment');
+
+      // Detect the session date — use the LATEST date found in the file
+      // so uploading a multi-date export still picks up the newest session
+      let latestDate = null;
+      for(const row of rows){
+        const seg = segCol ? (row[segCol]||'').trim() : '';
+        if(seg && seg !== 'Whole Session') continue;
+        const d = parseDate((row[dateCol]||'').trim());
+        if(d && (!latestDate || d > latestDate)) latestDate = d;
+      }
+      const dateStr = latestDate;
+      if(!dateStr){showErr('Could not detect a valid date in CSV');return;}
+
+      // Build player records:
+      // 1. Only use Whole Session rows (skip Match/segment sub-rows)
+      // 2. Only use rows matching the latest date
+      // 3. Deduplicate by player name (keep first occurrence)
+      const seen = new Set();
+      const players = [];
+      for(const row of rows){
+        const seg = segCol ? (row[segCol]||'').trim() : '';
+        if(seg && seg !== 'Whole Session') continue;
+        const rowDate = parseDate((row[dateCol]||'').trim());
+        if(rowDate !== dateStr) continue;
+        const name = normName(row[nameCol]||'');
+        if(!name||seen.has(name)) continue;
+        seen.add(name);
+        const rec = {name};
+        for(const m of METRICS) rec[m.key] = parseNum(colMap[m.key]?row[colMap[m.key]]:'');
+        players.push(rec);
+      }
+
+      // Compute team averages
+      const teamAvg = {};
+      for(const m of METRICS){
+        const vals = players.map(p=>p[m.key]).filter(v=>v!==null);
+        teamAvg[m.key] = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10 : null;
+      }
+
+      // Load rating (HMLD proxy — will be replaced when thresholds arrive)
+      const avgHMLD = teamAvg.hmld;
+      players.forEach(p=>{
+        if(p.hmld!==null&&avgHMLD){
+          const r=p.hmld/avgHMLD;
+          p.load=r>=1.15?'H':r<0.85?'L':'M';
+        }else p.load='M';
+      });
+
+      // Above-average per metric
+      const aboveAvg={};
+      for(const m of METRICS){
+        if(teamAvg[m.key]!==null)
+          aboveAvg[m.key]=players.filter(p=>p[m.key]!==null&&p[m.key]>teamAvg[m.key]).map(p=>p.name);
+      }
+
+      session = {date:dateStr, players, teamAvg, aboveAvg};
+      launchDashboard();
+    }catch(err){showErr('Error reading CSV: '+err.message);}
+  };
+  reader.readAsText(file);
+}
+
+// ─── LAUNCH ────────────────────────────────────────────────────────────────
+function launchDashboard(){
+  document.getElementById('upload-screen').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  document.getElementById('session-label').textContent = session.date||'Session';
+  document.getElementById('player-count').textContent = session.players.length+' players';
+  renderTeamCards();
+  renderAboveAvg();
+  renderCharts();
+  renderPlayerTable();
+  renderSeasonAvg();
+  checkFlags();
+  // Auto-sync if key exists
+  if(getKey()) startSync();
+}
+
+// ─── TABS ──────────────────────────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ─── TEAM CARDS ────────────────────────────────────────────────────────────
+function renderTeamCards(){
+  const avg = session.teamAvg;
+  const fmt = (v,unit)=>v!==null?v+(unit?' '+unit:''):'--';
+  document.getElementById('team-cards').innerHTML = METRICS.map(m=>`
+    <div class="card">
+      <div class="card-label">${m.label}</div>
+      <div class="card-value">${avg[m.key]!==null?avg[m.key]:'--'}</div>
+      <div class="card-unit">${m.unit}</div>
+    </div>`).join('');
+}
+
+// ─── ABOVE AVERAGE TABLE ───────────────────────────────────────────────────
+function renderAboveAvg(){
+  const ab = session.aboveAvg;
+  let html='<thead><tr><th>Metric</th><th>Team Avg</th><th>Players Above Average</th></tr></thead><tbody>';
+  for(const m of METRICS){
+    const names = ab[m.key]||[];
+    const avg = session.teamAvg[m.key];
+    html+=`<tr>
+      <td style="font-family:var(--font);font-weight:600">${m.label} (${m.unit||'#'})</td>
+      <td>${avg!==null?avg:'--'}</td>
+      <td style="font-family:var(--font);white-space:normal">${names.length?names.join(', '):'—'}</td>
+    </tr>`;
+  }
+  html+='</tbody>';
+  document.getElementById('above-avg-table').innerHTML=html;
+}
+
+// ─── CHARTS ────────────────────────────────────────────────────────────────
+function renderCharts(){
+  destroyChart('chart-dist');destroyChart('chart-hmld');
+  const sorted=[...session.players].sort((a,b)=>(b.distance||0)-(a.distance||0));
+  const names=sorted.map(p=>p.name.split(' ')[0]);
+  const chartOpts=(label,color)=>({
+    responsive:true,maintainAspectRatio:true,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw}}},
+    scales:{
+      x:{grid:{color:'rgba(11,34,64,.06)'},ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}},
+      y:{grid:{color:'rgba(11,34,64,.06)'},ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}}
+    }
+  });
+  charts['chart-dist']=new Chart(document.getElementById('chart-dist'),{
+    type:'bar',data:{labels:names,datasets:[{data:sorted.map(p=>p.distance),backgroundColor:'rgba(75,170,220,.7)',borderColor:'#4BAADC',borderWidth:1,borderRadius:4}]},
+    options:chartOpts()
+  });
+  const sorted2=[...session.players].sort((a,b)=>(b.hmld||0)-(a.hmld||0));
+  charts['chart-hmld']=new Chart(document.getElementById('chart-hmld'),{
+    type:'bar',data:{labels:sorted2.map(p=>p.name.split(' ')[0]),datasets:[{data:sorted2.map(p=>p.hmld),backgroundColor:'rgba(240,120,48,.7)',borderColor:'#F07830',borderWidth:1,borderRadius:4}]},
+    options:chartOpts()
+  });
+}
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+// ─── PLAYER TABLE ──────────────────────────────────────────────────────────
+function renderPlayerTable(){
+  const p=[...session.players].sort((a,b)=>sortDir*(((a[sortKey]??-Infinity)<(b[sortKey]??-Infinity))?1:-1));
+  const thClick=key=>`onclick="sortTable('${key}')"`;
+  let html=`<thead><tr>
+    <th>Player</th>
+    ${METRICS.map(m=>`<th ${thClick(m.key)}>${m.label}</th>`).join('')}
+    <th>Load</th>
+  </tr></thead><tbody>`;
+  p.forEach(pl=>{
+    const init=pl.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const lr=pl.load;
+    html+=`<tr>
+      <td><div class="name-cell" onclick="showPlayer('${pl.name.replace(/'/g,"\\'")}')"><div class="avatar">${init}</div>${pl.name}</div></td>
+      ${METRICS.map(m=>`<td>${pl[m.key]!==null?pl[m.key]:'--'}</td>`).join('')}
+      <td><span class="badge badge-${lr}">${lr==='H'?'High':lr==='L'?'Low':'Moderate'}</span></td>
+    </tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('player-table').innerHTML=html;
+}
+function sortTable(key){
+  if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=-1;}
+  renderPlayerTable();
+}
+
+// ─── PLAYER DETAIL ─────────────────────────────────────────────────────────
+function showPlayer(name){
+  const pl=session.players.find(p=>p.name===name);
+  if(!pl)return;
+  document.getElementById('player-list-view').style.display='none';
+  const detail=document.getElementById('player-detail');
+  detail.style.display='block';
+  const init=pl.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const lr=pl.load;
+  detail.innerHTML=`
+    <div class="player-hdr">
+      <div class="avatar-lg">${init}</div>
+      <div>
+        <div class="player-name">${pl.name} ${pl.load==='H'?'<span class="flag-badge">⚠️ High Load</span>':''}</div>
+        <div class="player-meta">Session: ${session.date}</div>
+      </div>
+      <button class="back-btn" onclick="closePlayer()">← Back</button>
+    </div>
+    <div class="avg-cards">
+      ${METRICS.map(m=>`<div class="avg-card"><div class="avg-card-label">${m.label}</div><div class="avg-card-value">${pl[m.key]!==null?pl[m.key]:'--'}</div><div class="card-unit">${m.unit}</div></div>`).join('')}
+    </div>
+    <div class="sec-head"><div class="sec-title">vs Team Average</div></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Metric</th><th>Player</th><th>Team Avg</th><th>Diff</th></tr></thead><tbody>
+      ${METRICS.map(m=>{
+        const pv=pl[m.key],ta=session.teamAvg[m.key];
+        const diff=pv!==null&&ta!==null?Math.round((pv-ta)*10)/10:null;
+        const col=diff===null?'':(diff>0?'color:var(--high)':'color:var(--low)');
+        return `<tr><td style="font-family:var(--font);font-weight:600">${m.label}</td><td>${pv!==null?pv:'--'}</td><td>${ta!==null?ta:'--'}</td><td style="${col}">${diff!==null?(diff>=0?'+':'')+diff:'--'}</td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>`;
+}
+function closePlayer(){
+  document.getElementById('player-detail').style.display='none';
+  document.getElementById('player-list-view').style.display='block';
+}
+
+// ─── SEASON AVERAGES (local sample) ───────────────────────────────────────
+function renderSeasonAvg(){
+  // Show current session averages as a proxy until full history is available
+  const avg=session.teamAvg;
+  document.getElementById('season-avg-cards').innerHTML=METRICS.map(m=>`
+    <div class="avg-card"><div class="avg-card-label">${m.label}</div>
+    <div class="avg-card-value">${avg[m.key]!==null?avg[m.key]:'--'}</div>
+    <div class="card-unit">${m.unit}</div></div>`).join('');
+
+  // HIR per player chart
+  destroyChart('chart-hir');destroyChart('chart-spd');
+  const sorted=[...session.players].sort((a,b)=>(b.hir||0)-(a.hir||0));
+  charts['chart-hir']=new Chart(document.getElementById('chart-hir'),{type:'bar',data:{
+    labels:sorted.map(p=>p.name.split(' ')[0]),
+    datasets:[{data:sorted.map(p=>p.hir),backgroundColor:'rgba(75,170,220,.7)',borderColor:'#4BAADC',borderWidth:1,borderRadius:4}]
+  },options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}},y:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}}}}});
+
+  const sorted2=[...session.players].sort((a,b)=>(b.topspeed||0)-(a.topspeed||0));
+  charts['chart-spd']=new Chart(document.getElementById('chart-spd'),{type:'bar',data:{
+    labels:sorted2.map(p=>p.name.split(' ')[0]),
+    datasets:[{data:sorted2.map(p=>p.topspeed),backgroundColor:'rgba(245,197,24,.8)',borderColor:'#D4A800',borderWidth:1,borderRadius:4}]
+  },options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}},y:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}}}}});
+}
+
+// ─── FLAGS ────────────────────────────────────────────────────────────────
+function checkFlags(){
+  const flagged=session.players.filter(p=>p.load==='H');
+  const wrap=document.getElementById('flag-section-wrap');
+  if(!flagged.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=`<div class="flag-section">
+    <div class="flag-title">⚠️ High Load Today (${flagged.length} players)</div>
+    <div class="flag-list">${flagged.map(p=>`<div class="flag-chip" onclick="showTab('players',document.querySelectorAll('.nav-btn')[1]);showPlayer('${p.name.replace(/'/g,"\\'")}');">${p.name}</div>`).join('')}</div>
+  </div>`;
+}
+
+// ─── NOTION SYNC ───────────────────────────────────────────────────────────
+async function notionReq(path,method,body){
+  const key=getKey();
+  if(!key) throw new Error('No Notion key saved');
+  const url=PROXY+encodeURIComponent('https://api.notion.com/v1/'+path);
+  const r=await fetch(url,{method,headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json','Notion-Version':NV},body:body?JSON.stringify(body):undefined});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.status);}
+  return r.json();
+}
+
+let syncRunning=false;
+function log(msg,type='info'){
+  const panel=document.getElementById('sync-panel');panel.style.display='block';
+  const line=document.createElement('div');line.className='log-'+type;
+  line.textContent='['+(new Date().toLocaleTimeString())+'] '+msg;
+  document.getElementById('sync-log').appendChild(line);
+  document.getElementById('sync-log').scrollTop=9999;
+}
+
+async function startSync(){
+  if(syncRunning||!session)return;
+  if(!getKey()){log('No Notion key — enter key on upload screen','err');return;}
+  syncRunning=true;
+  const btn=document.getElementById('sync-btn');
+  btn.className='sync-btn syncing';btn.querySelector('div').textContent='';
+  btn.lastChild.textContent=' Syncing...';
+
+  try{
+    log('Starting sync for '+session.date,'pending');
+    await syncSessionCalendar();
+    await syncPlayerLoads();
+    await syncSquadProfiles();
+    log('All done ✓','ok');
+    btn.className='sync-btn done';btn.lastChild.textContent=' Synced ✓';
+  }catch(e){
+    log('Sync error: '+e.message,'err');
+    btn.className='sync-btn';btn.lastChild.textContent=' Retry sync';
+  }
+  syncRunning=false;
+}
+
+async function syncSessionCalendar(){
+  log('Creating session calendar entry...','pending');
+  const avg=session.teamAvg;
+  const flagged=session.players.filter(p=>p.load==='H').map(p=>p.name).join(', ')||'None';
+  const high=session.players.filter(p=>p.load==='H').map(p=>p.name).join(', ')||'None';
+  const aboveLines=METRICS.map(m=>{const ns=session.aboveAvg[m.key]||[];return ns.length?m.label+': '+ns.join(', '):null;}).filter(Boolean).join('\n');
+
+  const content='## Team averages — '+session.date+'\n\n'+
+    METRICS.map(m=>`| ${m.label} (${m.unit||'#'}) | ${avg[m.key]!==null?avg[m.key]:'—'} |`).join('\n')+'\n\n---\n\n'+
+    '## High Load Players\n\n'+high+'\n\n---\n\n'+
+    '## Above Team Average\n\n'+aboveLines+'\n\n---\n\n## Session notes\n\n> Add coaching observations here.';
+
+  const props={
+    "Session":{title:[{text:{content:session.date}}]},
+    "Flagged Players":{rich_text:[{text:{content:flagged}}]},
+    "High Load Players":{rich_text:[{text:{content:high}}]},
+    "Players":{number:session.players.length},
+  };
+  if(session.date) props["Date"]={date:{start:session.date}};
+  METRICS.forEach(m=>{if(avg[m.key]!==null)props['Avg '+m.label+(m.unit?' ('+m.unit+')':'')]={number:avg[m.key]};});
+  // Map metric keys to Notion column names
+  const notionCols={'Avg Duration (mins)':'Avg Duration (mins)','Avg Distance (m)':'Avg Distance (m)','Avg m/min (m/min)':'Avg Metres per Minute','Avg HIR (m)':'Avg HIR (m)','Avg Sprint (m)':'Avg Sprint (m)','Avg Top Speed (m/s)':'Avg Top Speed (m/s)','Avg Accels ()':'Avg Accelerations','Avg Decels ()':'Avg Decelerations','Avg % Max Spd (%)':'Avg % Max Speed','Avg HMLD (m)':'Avg HMLD (m)'};
+  const cleanProps={'Session':props['Session']};
+  if(props['Date'])cleanProps['Date']=props['Date'];
+  cleanProps['Players']=props['Players'];
+  cleanProps['Flagged Players']=props['Flagged Players'];
+  cleanProps['High Load Players']=props['High Load Players'];
+  if(avg.duration!==null)cleanProps['Avg Duration (mins)']={number:avg.duration};
+  if(avg.distance!==null)cleanProps['Avg Distance (m)']={number:avg.distance};
+  if(avg.mpm!==null)cleanProps['Avg Metres per Minute']={number:avg.mpm};
+  if(avg.hir!==null)cleanProps['Avg HIR (m)']={number:avg.hir};
+  if(avg.sprint!==null)cleanProps['Avg Sprint (m)']={number:avg.sprint};
+  if(avg.topspeed!==null)cleanProps['Avg Top Speed (m/s)']={number:avg.topspeed};
+  if(avg.accel!==null)cleanProps['Avg Accelerations']={number:avg.accel};
+  if(avg.decel!==null)cleanProps['Avg Decelerations']={number:avg.decel};
+  if(avg.pctmax!==null)cleanProps['Avg % Max Speed']={number:avg.pctmax};
+  if(avg.hmld!==null)cleanProps['Avg HMLD (m)']={number:avg.hmld};
+  cleanProps['Notes']={rich_text:[{text:{content:''}}]};
+
+  await notionReq('pages','POST',{parent:{database_id:CAL_DB},properties:cleanProps,children:[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:content}}]}}]});
+  log('Session calendar ✓','ok');
+}
+
+async function syncPlayerLoads(){
+  log('Syncing '+session.players.length+' player load entries...','pending');
+  let ok=0,fail=0;
+  for(const pl of session.players){
+    try{
+      const lr=pl.load==='H'?'High':pl.load==='L'?'Low':'Moderate';
+      const props={
+        "Entry":{title:[{text:{content:pl.name+' — '+(session.date||'Session')}}]},
+        "Player":{rich_text:[{text:{content:pl.name}}]},
+        "Load Rating":{select:{name:lr}},
+        "Flagged":{checkbox:pl.load==='H'},
+      };
+      if(session.date)props["Date"]={date:{start:session.date}};
+      if(pl.duration!==null)props["Duration (mins)"]={number:pl.duration};
+      if(pl.distance!==null)props["Distance (m)"]={number:pl.distance};
+      if(pl.mpm!==null)props["Metres per Minute"]={number:pl.mpm};
+      if(pl.hir!==null)props["High Intensity Running (m)"]={number:pl.hir};
+      if(pl.sprint!==null)props["Sprint Distance (m)"]={number:pl.sprint};
+      if(pl.topspeed!==null)props["Top Speed (m/s)"]={number:pl.topspeed};
+      if(pl.accel!==null)props["Accelerations"]={number:pl.accel};
+      if(pl.decel!==null)props["Decelerations"]={number:pl.decel};
+      if(pl.pctmax!==null)props["% Max Speed"]={number:pl.pctmax};
+      if(pl.hmld!==null)props["HMLD (m)"]={number:pl.hmld};
+      await notionReq('pages','POST',{parent:{database_id:LOG_DB},properties:props});
+      ok++;
+    }catch(e){log(pl.name+': '+e.message,'err');fail++;}
+  }
+  log('Player loads: '+ok+' synced'+(fail?' ('+fail+' failed)':''),'ok');
+}
+
+async function syncSquadProfiles(){
+  log('Updating Squad Profiles...','pending');
+  // Query existing profiles
+  let pageMap={};
+  try{
+    const res=await notionReq('databases/'+SQUAD_DB+'/query','POST',{page_size:50});
+    for(const pg of res.results){
+      const name=pg.properties['Player']?.title?.[0]?.plain_text||'';
+      if(name) pageMap[name]=pg.id;
+    }
+  }catch(e){log('Could not query Squad Profiles: '+e.message,'err');return;}
+
+  for(const pl of session.players){
+    const lr=pl.load==='H'?'High':pl.load==='L'?'Low':'Moderate';
+    const props={
+      "Load Rating":{select:{name:lr}},
+      "Flagged":{select:{name:pl.load==='H'?'⚠️ Flagged':'OK'}},
+    };
+    if(session.date)props["Last Session"]={date:{start:session.date}};
+    if(pl.duration!==null)props["Duration (mins)"]={number:pl.duration};
+    if(pl.distance!==null)props["Distance (m)"]={number:pl.distance};
+    if(pl.mpm!==null)props["Metres per Minute"]={number:pl.mpm};
+    if(pl.hir!==null)props["High Intensity Running (m)"]={number:pl.hir};
+    if(pl.sprint!==null)props["Sprint Distance (m)"]={number:pl.sprint};
+    if(pl.topspeed!==null)props["Top Speed (m/s)"]={number:pl.topspeed};
+    if(pl.accel!==null)props["Accelerations"]={number:pl.accel};
+    if(pl.decel!==null)props["Decelerations"]={number:pl.decel};
+    if(pl.pctmax!==null)props["% Max Speed"]={number:pl.pctmax};
+    if(pl.hmld!==null)props["HMLD (m)"]={number:pl.hmld};
+    try{
+      if(pageMap[pl.name]){
+        await notionReq('pages/'+pageMap[pl.name],'PATCH',{properties:props});
+      }else{
+        props["Player"]={title:[{text:{content:pl.name}}]};
+        await notionReq('pages','POST',{parent:{database_id:SQUAD_DB},properties:props});
+      }
+    }catch(e){log('Profile '+pl.name+': '+e.message,'err');}
+  }
+  log('Squad Profiles ✓','ok');
+}
+</script>
+</body>
+</html>
