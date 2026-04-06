@@ -750,16 +750,20 @@ async function syncPlayerLoads(){
 
 async function syncSquadProfiles(){
   log('Updating Squad Profiles...','pending');
-  // Query existing profiles
+  // Query existing profiles — get ALL players currently in the database
   let pageMap={};
   try{
-    const res=await notionReq('databases/'+SQUAD_DB+'/query','POST',{page_size:50});
+    const res=await notionReq('databases/'+SQUAD_DB+'/query','POST',{page_size:100});
     for(const pg of res.results){
       const name=pg.properties['Player']?.title?.[0]?.plain_text||'';
       if(name) pageMap[name]=pg.id;
     }
   }catch(e){log('Could not query Squad Profiles: '+e.message,'err');return;}
 
+  // Players present in today's CSV
+  const presentNames=new Set(session.players.map(p=>p.name));
+
+  // ── 1. Update players who ARE in the CSV ─────────────────────
   for(const pl of session.players){
     const lr=pl.load==='H'?'High':pl.load==='L'?'Low':'Moderate';
     const props={
@@ -786,7 +790,35 @@ async function syncSquadProfiles(){
       }
     }catch(e){log('Profile '+pl.name+': '+e.message,'err');}
   }
-  log('Squad Profiles ✓','ok');
+
+  // ── 2. Zero out players NOT in the CSV (rest day / absent) ───
+  // All metrics → 0, Load Rating → Low, Flagged → OK
+  // This counts as a rest day and breaks consecutive HIGH streaks
+  const restProps={
+    "Load Rating":{select:{name:'Low'}},
+    "Flagged":{select:{name:'OK'}},
+    "Duration (mins)":{number:0},
+    "Distance (m)":{number:0},
+    "Metres per Minute":{number:0},
+    "High Intensity Running (m)":{number:0},
+    "Sprint Distance (m)":{number:0},
+    "Top Speed (m/s)":{number:0},
+    "Accelerations":{number:0},
+    "Decelerations":{number:0},
+    "% Max Speed":{number:0},
+    "HMLD (m)":{number:0},
+  };
+  if(session.date) restProps["Last Session"]={date:{start:session.date}};
+
+  for(const[name,pid] of Object.entries(pageMap)){
+    if(presentNames.has(name)) continue; // already updated above
+    try{
+      await notionReq('pages/'+pid,'PATCH',{properties:restProps});
+    }catch(e){log('Rest day '+name+': '+e.message,'err');}
+  }
+
+  const absentCount=Object.keys(pageMap).filter(n=>!presentNames.has(n)).length;
+  log(`Squad Profiles ✓ (${presentNames.size} updated, ${absentCount} set to rest/0)`,'ok');
 }
 </script>
 </body>
