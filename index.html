@@ -212,9 +212,12 @@ tbody tr:hover td{background:var(--sky-mist)}
       <div id="flag-section-wrap"></div>
       <div class="sec-head"><div class="sec-title">Team Averages — Session</div><div class="sec-note" id="player-count"></div></div>
       <div class="cards-grid" id="team-cards"></div>
+      <div class="sec-head"><div class="sec-title">Squad Output — Key Metrics</div></div>
       <div class="charts-2col">
-        <div class="chart-box"><div class="chart-title">Distance (m)</div><canvas id="chart-dist"></canvas></div>
-        <div class="chart-box"><div class="chart-title">HMLD (m)</div><canvas id="chart-hmld"></canvas></div>
+        <div class="chart-box"><div class="chart-title">Total Distance (m)</div><canvas id="chart-dist"></canvas></div>
+        <div class="chart-box"><div class="chart-title">HIR — High Speed Running (m)</div><canvas id="chart-hir"></canvas></div>
+        <div class="chart-box"><div class="chart-title">Sprint Distance (m)</div><canvas id="chart-sprint"></canvas></div>
+        <div class="chart-box"><div class="chart-title">HMLD — High Metabolic Load (m)</div><canvas id="chart-hmld"></canvas></div>
       </div>
       <div class="sec-head"><div class="sec-title">Above Team Average — All Metrics</div></div>
       <div class="tbl-wrap"><table id="above-avg-table"></table></div>
@@ -241,10 +244,6 @@ tbody tr:hover td{background:var(--sky-mist)}
     <div class="container">
       <div class="sec-head"><div class="sec-title">Season Trends</div></div>
       <div class="avg-cards" id="season-avg-cards"></div>
-      <div class="charts-2col">
-        <div class="chart-box"><div class="chart-title">HIR (m) per player</div><canvas id="chart-hir"></canvas></div>
-        <div class="chart-box"><div class="chart-title">Top Speed (m/s) per player</div><canvas id="chart-spd"></canvas></div>
-      </div>
     </div>
   </div>
 </div>
@@ -320,6 +319,15 @@ function saveKey(){
 }
 function getKey(){return localStorage.getItem('notion_key')||'';}
 window.addEventListener('DOMContentLoaded',()=>{
+  if(getKey()) document.getElementById('notion-key').value=getKey();
+  // Restore last session from localStorage so dashboard stays visible until new CSV
+  try{
+    const saved=localStorage.getItem('sjax_session');
+    if(saved){
+      session=JSON.parse(saved);
+      launchDashboard();
+    }
+  }catch(e){ session=null; }
   if(getKey()) document.getElementById('key-status').textContent='✓ Notion key saved';
 });
 
@@ -445,6 +453,8 @@ function readFile(file){
       }
 
       session = {date:dateStr, players, teamAvg, aboveAvg};
+      // Persist to localStorage so dashboard survives page reload until next CSV
+      try{ localStorage.setItem('sjax_session', JSON.stringify(session)); }catch(e){}
       launchDashboard();
     }catch(err){showErr('Error reading CSV: '+err.message);}
   };
@@ -506,27 +516,36 @@ function renderAboveAvg(){
 
 // ─── CHARTS ────────────────────────────────────────────────────────────────
 function renderCharts(){
-  destroyChart('chart-dist');destroyChart('chart-hmld');
-  const sorted=[...session.players].sort((a,b)=>(b.distance||0)-(a.distance||0));
-  const names=sorted.map(p=>p.name.split(' ')[0]);
-  const chartOpts=(label,color)=>({
+  ['chart-dist','chart-hir','chart-sprint','chart-hmld'].forEach(id=>destroyChart(id));
+
+  const chartOpts=(color)=>({
     responsive:true,maintainAspectRatio:true,
-    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw}}},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw.toLocaleString()}}},
     scales:{
-      x:{grid:{color:'rgba(11,34,64,.06)'},ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}},
-      y:{grid:{color:'rgba(11,34,64,.06)'},ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}}
+      x:{grid:{color:'rgba(11,34,64,.06)'},ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10},maxRotation:45}},
+      y:{grid:{color:'rgba(11,34,64,.06)'},ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10},callback:v=>v.toLocaleString()}}
     }
   });
-  charts['chart-dist']=new Chart(document.getElementById('chart-dist'),{
-    type:'bar',data:{labels:names,datasets:[{data:sorted.map(p=>p.distance),backgroundColor:'rgba(75,170,220,.7)',borderColor:'#4BAADC',borderWidth:1,borderRadius:4}]},
-    options:chartOpts()
-  });
-  const sorted2=[...session.players].sort((a,b)=>(b.hmld||0)-(a.hmld||0));
-  charts['chart-hmld']=new Chart(document.getElementById('chart-hmld'),{
-    type:'bar',data:{labels:sorted2.map(p=>p.name.split(' ')[0]),datasets:[{data:sorted2.map(p=>p.hmld),backgroundColor:'rgba(240,120,48,.7)',borderColor:'#F07830',borderWidth:1,borderRadius:4}]},
-    options:chartOpts()
-  });
+
+  // Sort each chart independently by its own metric descending
+  function mkChart(id, metric, color, borderColor){
+    const sorted=[...session.players].sort((a,b)=>(b[metric]||0)-(a[metric]||0));
+    const names=sorted.map(p=>p.name.split(' ').pop()); // last name only for space
+    charts[id]=new Chart(document.getElementById(id),{
+      type:'bar',
+      data:{labels:names,datasets:[{
+        data:sorted.map(p=>p[metric]||0),
+        backgroundColor:color,borderColor:borderColor,borderWidth:1,borderRadius:4
+      }]},
+      options:chartOpts()
+    });
+  }
+  mkChart('chart-dist',  'distance', 'rgba(75,170,220,.75)',  '#4BAADC');
+  mkChart('chart-hir',   'hir',      'rgba(80,200,140,.75)',  '#50C88C');
+  mkChart('chart-sprint','sprint',   'rgba(160,100,220,.75)', '#A064DC');
+  mkChart('chart-hmld',  'hmld',     'rgba(240,120,48,.75)',  '#F07830');
 }
+
 function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
 
 // ─── PLAYER TABLE ──────────────────────────────────────────────────────────
@@ -602,19 +621,6 @@ function renderSeasonAvg(){
     <div class="avg-card-value">${avg[m.key]!==null?avg[m.key]:'--'}</div>
     <div class="card-unit">${m.unit}</div></div>`).join('');
 
-  // HIR per player chart
-  destroyChart('chart-hir');destroyChart('chart-spd');
-  const sorted=[...session.players].sort((a,b)=>(b.hir||0)-(a.hir||0));
-  charts['chart-hir']=new Chart(document.getElementById('chart-hir'),{type:'bar',data:{
-    labels:sorted.map(p=>p.name.split(' ')[0]),
-    datasets:[{data:sorted.map(p=>p.hir),backgroundColor:'rgba(75,170,220,.7)',borderColor:'#4BAADC',borderWidth:1,borderRadius:4}]
-  },options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}},y:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}}}}});
-
-  const sorted2=[...session.players].sort((a,b)=>(b.topspeed||0)-(a.topspeed||0));
-  charts['chart-spd']=new Chart(document.getElementById('chart-spd'),{type:'bar',data:{
-    labels:sorted2.map(p=>p.name.split(' ')[0]),
-    datasets:[{data:sorted2.map(p=>p.topspeed),backgroundColor:'rgba(245,197,24,.8)',borderColor:'#D4A800',borderWidth:1,borderRadius:4}]
-  },options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}},y:{ticks:{color:'#6B87A4',font:{family:'DM Mono',size:10}}}}}});
 }
 
 // ─── FLAGS ────────────────────────────────────────────────────────────────
