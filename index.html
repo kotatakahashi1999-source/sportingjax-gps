@@ -67,6 +67,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .nav-btn{background:transparent;border:1px solid transparent;color:var(--muted);padding:6px 14px;border-radius:100px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:500;transition:.18s;white-space:nowrap}
 .nav-btn:hover{border-color:var(--border2);color:var(--text)}
 .nav-btn.active{background:var(--sky);color:#fff;border-color:var(--sky)}
+.upload-new-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;background:var(--sky);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s}
+.upload-new-btn:hover{background:var(--sky2)}
 .sync-btn{background:var(--navy);color:#fff;border:none;padding:8px 18px;border-radius:100px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.2s;white-space:nowrap}
 .sync-btn:hover{background:var(--sky2)}
 .sync-btn.syncing{background:var(--orange);animation:pulse 1.2s ease-in-out infinite}
@@ -200,6 +202,10 @@ tbody tr:hover td{background:var(--sky-mist)}
     </div>
     <div class="topbar-right">
       <div class="session-pill" id="session-label">—</div>
+      <label class="upload-new-btn" title="Upload new session CSV">
+        ＋ New Session
+        <input type="file" accept=".csv" style="display:none" onchange="readFile(this.files[0])">
+      </label>
       <button class="sync-btn" id="sync-btn" onclick="startSync()">
         <div class="sync-dot"></div>Sync to Notion
       </button>
