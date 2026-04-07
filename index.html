@@ -701,18 +701,14 @@ async function syncSessionCalendar(){
   if(avg.pctmax!==null)   cleanProps['Avg % Max Speed']={number:avg.pctmax};
   if(avg.hmld!==null)     cleanProps['Avg HMLD (m)']={number:avg.hmld};
 
-  // Build page body as multiple blocks — each block max 1900 chars (safe under Notion's 2000 limit)
+  // Build page body blocks (each ≤1900 chars — Notion API limit)
   function txtBlock(s){ return {object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:s.slice(0,1900)}}]}}; }
-
   const avgTable='Team averages — '+session.date+'\n'+
     METRICS.map(m=>'  '+m.label+': '+(avg[m.key]!==null?avg[m.key]:'—')).join('\n');
-
-  // One block per metric for above-average (prevents any single block exceeding 1900 chars)
   const aboveBlocks=METRICS.map(m=>{
     const ns=session.aboveAvg[m.key]||[];
     return ns.length?txtBlock('Above avg '+m.label+': '+ns.join(', ')):null;
   }).filter(Boolean);
-
   const children=[
     txtBlock(avgTable),
     txtBlock('High Load Players: '+high),
@@ -720,8 +716,29 @@ async function syncSessionCalendar(){
     txtBlock('Session notes — add coaching observations here.'),
   ];
 
-  await notionReq('pages','POST',{parent:{database_id:CAL_DB},properties:cleanProps,children});
-  log('Session calendar ✓','ok');
+  // ── Duplicate check: PATCH if this date already exists, POST if new ──
+  try{
+    const existing=await notionReq('databases/'+CAL_DB+'/query','POST',{
+      filter:{property:'Date',date:{equals:session.date}},
+      page_size:1
+    });
+    if(existing.results && existing.results.length>0){
+      // Session for this date already exists — update it instead of creating a duplicate
+      const pid=existing.results[0].id;
+      await notionReq('pages/'+pid,'PATCH',{properties:cleanProps});
+      // Refresh body blocks
+      const blks=await notionReq('blocks/'+pid+'/children','GET');
+      for(const b of (blks.results||[])) await notionReq('blocks/'+b.id,'DELETE');
+      await notionReq('blocks/'+pid+'/children','PATCH',{children});
+      log('Session calendar ✓ (updated existing)','ok');
+    }else{
+      // No entry for this date — create fresh
+      await notionReq('pages','POST',{parent:{database_id:CAL_DB},properties:cleanProps,children});
+      log('Session calendar ✓ (new entry)','ok');
+    }
+  }catch(e){
+    log('Session calendar: '+e.message,'err');
+  }
 }
 
 async function syncPlayerLoads(){
