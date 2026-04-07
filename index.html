@@ -788,11 +788,54 @@ async function syncSquadProfiles(){
     if(pl.pctmax!==null)props["% Max Speed"]={number:pl.pctmax};
     if(pl.hmld!==null)props["HMLD (m)"]={number:pl.hmld};
     try{
-      if(pageMap[pl.name]){
-        await notionReq('pages/'+pageMap[pl.name],'PATCH',{properties:props});
+      let pid=pageMap[pl.name];
+      if(pid){
+        await notionReq('pages/'+pid,'PATCH',{properties:props});
       }else{
         props["Player"]={title:[{text:{content:pl.name}}]};
-        await notionReq('pages','POST',{parent:{database_id:SQUAD_DB},properties:props});
+        const created=await notionReq('pages','POST',{parent:{database_id:SQUAD_DB},properties:props});
+        pid=created.id;
+        pageMap[pl.name]=pid;
+      }
+      // ── Update page BODY heading to today's date ──────────────
+      if(pid && session.date){
+        const flag=pl.load==='H'?'⚠️ Currently flagged — 3+ consecutive high load sessions.':'✅ No flag.';
+        const body=[
+          {object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'⚡ Latest Session — '+session.date}}]}},
+          {object:'block',type:'table',table:{table_width:2,has_column_header:true,has_row_header:false,children:[
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Metric'}}],[{type:'text',text:{content:'Value'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Duration'}}],[{type:'text',text:{content:(pl.duration??0)+' mins'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Distance'}}],[{type:'text',text:{content:(pl.distance??0).toLocaleString()+' m'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'m/min'}}],[{type:'text',text:{content:String(pl.mpm??0)}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Top Speed'}}],[{type:'text',text:{content:(pl.topspeed??0)+' m/s'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'HIR'}}],[{type:'text',text:{content:(pl.hir??0).toLocaleString()+' m'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Sprint'}}],[{type:'text',text:{content:(pl.sprint??0).toLocaleString()+' m'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Accelerations'}}],[{type:'text',text:{content:String(pl.accel??0)}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'Decelerations'}}],[{type:'text',text:{content:String(pl.decel??0)}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'% Max Speed'}}],[{type:'text',text:{content:(pl.pctmax??0)+'%'}}]]}},
+            {object:'block',type:'table_row',table_row:{cells:[[{type:'text',text:{content:'HMLD'}}],[{type:'text',text:{content:(pl.hmld??0).toLocaleString()+' m'}}]]}},
+          ]}},
+        ];
+        // Get existing blocks, delete them, write fresh
+        try{
+          const blks=await notionReq('blocks/'+pid+'/children','GET');
+          for(const b of (blks.results||[])){
+            await notionReq('blocks/'+b.id,'DELETE');
+          }
+          await notionReq('blocks/'+pid+'/children','PATCH',{children:body});
+          // Re-append preserved static sections
+          await notionReq('blocks/'+pid+'/children','PATCH',{children:[
+            {object:'block',type:'divider',divider:{}},
+            {object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'📈 Season Averages — '+pl.sessions+' Sessions'}}]}},
+            {object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'(Season averages update after full-history upload)'}}]}},
+            {object:'block',type:'divider',divider:{}},
+            {object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'🏥 Medical & Availability'}}]}},
+            {object:'block',type:'quote',quote:{rich_text:[{type:'text',text:{content:'No current issues.'}}]}},
+            {object:'block',type:'divider',divider:{}},
+            {object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'📝 Coach Notes'}}]}},
+            {object:'block',type:'quote',quote:{rich_text:[{type:'text',text:{content:flag}}]}},
+          ]});
+        }catch(e){/* body update failed silently — properties still updated */}
       }
     }catch(e){log('Profile '+pl.name+': '+e.message,'err');}
   }
@@ -820,6 +863,19 @@ async function syncSquadProfiles(){
     if(presentNames.has(name)) continue; // already updated above
     try{
       await notionReq('pages/'+pid,'PATCH',{properties:restProps});
+      // Update body heading to show rest day
+      if(session.date){
+        try{
+          const blks=await notionReq('blocks/'+pid+'/children','GET');
+          // Only replace the first heading block (⚡ Latest Session...)
+          const firstBlock=(blks.results||[])[0];
+          if(firstBlock && firstBlock.type==='heading_2'){
+            await notionReq('blocks/'+firstBlock.id,'PATCH',{
+              heading_2:{rich_text:[{type:'text',text:{content:'⚡ Rest Day — '+session.date}}]}
+            });
+          }
+        }catch(e){/* silent */}
+      }
     }catch(e){log('Rest day '+name+': '+e.message,'err');}
   }
 
